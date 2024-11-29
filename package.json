@@ -1,0 +1,26 @@
+{
+  "name": "spz-js",
+  "version": "1.0.4",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist/**/*"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "spz",
+    "ply",
+    "converter",
+    "splat",
+    "3dgs",
+    "gaussian-splatting"
+  ],
+  "author": "Ludovit Kramar",
+  "description": "Convert between SPZ and PLY formats.",
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "type": "module"
+}
