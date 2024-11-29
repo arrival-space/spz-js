@@ -14,8 +14,19 @@ npm install github:ludovit-as/spz-js
 
 ```javascript
 import {
+    createReadStream,
+    readFileSync,
+    writeFileSync,
+    unlinkSync
+} from 'fs';
+import { Readable } from 'stream';
+import path from 'path';
+
+import {
     loadPly,
-    loadSpz
+    loadSpz,
+    serializePly,
+    serializeSpz
 } from 'spz-js';
 
 // Helper function to load either SPZ or PLY files
@@ -32,6 +43,13 @@ const loadFile = async (file) => {
     throw new Error(`Unsupported file extension: ${extension}`);
 };
 
+const gs = await loadFile("gs.ply"); // or gs.spz
+
+const plyData = serializePly(gs);
+writeFileSync("gs.ply", Buffer.from(plyData));
+
+const spzData = await serializeSpz(gs);
+writeFileSync("gs.spz", Buffer.from(spzData));
 ```
 
 ## Example (Browser)
