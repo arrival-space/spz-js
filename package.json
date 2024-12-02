@@ -1,6 +1,8 @@
 {
   "name": "spz-js",
-  "version": "1.0.4",
+  "email": "ludovit@arrival.space",
+  "author": "Ludovit Kramar",
+  "version": "1.0.5",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -17,10 +19,14 @@
     "3dgs",
     "gaussian-splatting"
   ],
-  "author": "Ludovit Kramar",
-  "description": "Convert between SPZ and PLY formats.",
+  "description": "Convert gaussian splats between SPZ and PLY formats.",
   "devDependencies": {
     "typescript": "^5.7.2"
   },
-  "type": "module"
+  "type": "module",
+  "homepage": "https://github.com/ludovit-as/spz-js",
+  "bugs": {
+    "url": "https://github.com/ludovit-as/spz-js/issues",
+    "email": "ludovit@arrival.space"
+  }
 }
