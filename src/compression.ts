@@ -1,6 +1,15 @@
+const createStream = (data: Uint8Array): ReadableStream<Uint8Array> => {
+    return new ReadableStream({
+        async start(controller) {
+            controller.enqueue(data);
+            controller.close();
+        },
+    })
+}
+
 export async function decompressGzipped(data: Uint8Array): Promise<Uint8Array> {
     try {
-        const stream = new Response(data).body;
+        const stream = createStream(data);
         if (!stream) throw new Error('Failed to create stream from data');
 
         return await decompressGzipStream(stream);
@@ -13,21 +22,17 @@ export async function decompressGzipped(data: Uint8Array): Promise<Uint8Array> {
 export async function decompressGzipStream(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
     const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
     const response = new Response(decompressedStream);
-    const blob = await response.blob();
-    const buffer = await blob.arrayBuffer();
+    const buffer = await response.arrayBuffer();
 
     return new Uint8Array(buffer);
 }
 
 export async function compressGzipped(data: Uint8Array): Promise<Uint8Array> {
     try {
-        const stream = new Response(data).body;
-        if (!stream) throw new Error('Failed to create stream from data');
-
+        const stream = createStream(data);
         const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
         const response = new Response(compressedStream);
-        const blob = await response.blob();
-        const buffer = await blob.arrayBuffer();
+        const buffer = await response.arrayBuffer();
 
         return new Uint8Array(buffer);
     } catch (error) {
