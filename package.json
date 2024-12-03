@@ -2,7 +2,7 @@
   "name": "spz-js",
   "email": "ludovit@arrival.space",
   "author": "Ludovit Kramar",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -28,5 +28,6 @@
   "bugs": {
     "url": "https://github.com/ludovit-as/spz-js/issues",
     "email": "ludovit@arrival.space"
-  }
+  },
+  "license": "MIT"
 }
