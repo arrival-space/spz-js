@@ -4,10 +4,10 @@ Based on the [original C++ library](https://github.com/nianticlabs/spz).
 
 ## Installation
 
-Install directly from github:
+Install directly from npm:
 
 ```bash
-npm install github:ludovit-as/spz-js
+npm install spz-js
 ```
 
 ## Example (Node.js)
