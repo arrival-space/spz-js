@@ -2,7 +2,7 @@
   "name": "spz-js",
   "email": "ludovit@arrival.space",
   "author": "Ludovit Kramar",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -29,5 +29,8 @@
     "url": "https://github.com/arrival-space/spz-js/issues",
     "email": "ludovit@arrival.space"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "playcanvas": "^2.3.3"
+  }
 }
