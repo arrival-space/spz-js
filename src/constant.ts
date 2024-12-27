@@ -3,15 +3,7 @@ export const SPZ_VERSION = 2;
 export const FLAG_ANTIALIASED = 0x1;
 export const COLOR_SCALE = 0.15;
 
-export interface PackedGaussiansHeader {
-    magic: number;
-    version: number;
-    numPoints: number;
-    shDegree: number;
-    fractionalBits: number;
-    flags: number;
-    reserved: number;
-}
+export const SH_C0 = 0.28209479177387814;
 
 export function degreeForDim(dim: number): number {
     if (dim < 3) return 0;

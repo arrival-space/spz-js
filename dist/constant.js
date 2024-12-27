@@ -2,6 +2,7 @@ export const SPZ_MAGIC = 0x5053474e; // NGSP = Niantic gaussian splat
 export const SPZ_VERSION = 2;
 export const FLAG_ANTIALIASED = 0x1;
 export const COLOR_SCALE = 0.15;
+export const SH_C0 = 0.28209479177387814;
 export function degreeForDim(dim) {
     if (dim < 3)
         return 0;

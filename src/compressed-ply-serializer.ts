@@ -3,7 +3,7 @@
 import { Quat } from 'playcanvas';
 
 import { GaussianCloud } from './types.js';
-import { dimForDegree } from './constant.js';
+import { dimForDegree, SH_C0 } from './constant.js';
 
 const generatedByString = 'spz-js package';
 
@@ -370,7 +370,6 @@ class Chunk {
         sz.max = clamp(sz.max, -20, 20);
 
         // convert f_dc_ to colors before calculating min/max and packaging
-        const SH_C0 = 0.28209479177387814;
         for (let i = 0; i < f_dc_0.length; ++i) {
             f_dc_0[i] = f_dc_0[i] * SH_C0 + 0.5;
             f_dc_1[i] = f_dc_1[i] * SH_C0 + 0.5;
