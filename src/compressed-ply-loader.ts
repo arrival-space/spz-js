@@ -399,9 +399,9 @@ const decompress = (compressedData: CompressedPlyData, elements: HeaderElement[]
         data.alphas[i] = (c.w <= 0) ? -40 : (c.w >= 1) ? 40 : -Math.log(1 / c.w - 1);
 
         const shDim = dimForDegree(shBands);
-        for (let j = 0; j < 3; ++j) {
-            for (let k = 0; k < 15; ++k) {
-                data.sh[(i * shDim + k) * 3 + j] = sh[j * 15 + k];
+        for (let j = 0; j < shBands; ++j) {
+            for (let k = 0; k < shDim; ++k) {
+                data.sh[(i * shDim + k) * 3 + j] = sh[j * shDim + k];
             }
         }
     }
