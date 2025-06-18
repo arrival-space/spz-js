@@ -1,101 +1,138 @@
 import { degreeForDim } from './constant.js';
-function getFieldIndex(fields, name) {
-    const index = fields.get(name);
-    if (index === undefined) {
-        console.error(`[PLY ERROR] Missing field: ${name}`);
-        return -1;
+/* ────────────────────────────── constants ─────────────────────────────── */
+const END_MARKER = /\r?\nend_header\r?\n/; // handles \n  and  \r\n
+/* ────────────────────────────── helpers ───────────────────────────────── */
+function getFieldIndex(map, name) {
+    const idx = map.get(name);
+    if (idx === undefined) {
+        throw new Error(`[PLY] Missing required field "${name}"`);
     }
-    return index;
+    return idx;
 }
-export async function loadPly(stream) {
-    const reader = stream.getReader();
-    // Read header
-    const textDecoder = new TextDecoder();
+function byteSizeForType(type) {
+    switch (type) {
+        case 'float':
+        case 'int':
+        case 'uint':
+        case 'uint32':
+        case 'int32': return 4;
+        case 'double': return 8;
+        case 'uchar':
+        case 'char':
+        case 'uint8':
+        case 'int8': return 1;
+        case 'ushort':
+        case 'short':
+        case 'uint16':
+        case 'int16': return 2;
+        default:
+            throw new Error(`[PLY] Unsupported property type "${type}"`);
+    }
+}
+/* ────────────────────────────── parser ────────────────────────────────── */
+export async function loadPly(readable) {
+    /* ---------- 1. Stream-safe header read -------------------------------- */
+    const reader = readable.getReader();
+    const decoder = new TextDecoder();
+    const headerChunks = [];
     let headerText = '';
-    let headerDone = false;
-    let binaryData = new Uint8Array();
-    while (!headerDone) {
+    let binaryStartByteOffset = 0; // where vertex blob begins (byte index)
+    while (true) {
         const { value, done } = await reader.read();
         if (done)
-            break;
-        const text = textDecoder.decode(value, { stream: true });
-        headerText += text;
-        const endHeaderIndex = headerText.indexOf('\nend_header\n');
-        if (endHeaderIndex !== -1) {
-            headerDone = true;
-            headerText = headerText.slice(0, endHeaderIndex);
-            // Keep remaining binary data after header
-            const fullText = textDecoder.decode(value);
-            const binaryStart = fullText.indexOf('\nend_header\n') + '\nend_header\n'.length;
-            binaryData = value.slice(binaryStart);
-        }
+            throw new Error('[PLY] Unexpected EOF before end_header');
+        headerChunks.push(value);
+        headerText += decoder.decode(value, { stream: true });
+        const m = headerText.match(END_MARKER);
+        if (!m)
+            continue; // need more data
+        const headerChars = headerText.indexOf(m[0]) + m[0].length;
+        binaryStartByteOffset = new TextEncoder().encode(headerText.slice(0, headerChars)).length;
+        // Trim sentinel from headerText (makes later `.split` cleaner)
+        headerText = headerText.slice(0, headerChars - m[0].length);
+        break;
     }
-    const lines = headerText.split('\n');
+    /* ---------- 2. Stitch chunks & grab first payload bytes --------------- */
+    const headerTotal = headerChunks.reduce((s, c) => s + c.length, 0);
+    const stitched = new Uint8Array(headerTotal);
+    let off = 0;
+    for (const c of headerChunks) {
+        stitched.set(c, off);
+        off += c.length;
+    }
+    const initialBinary = stitched.subarray(binaryStartByteOffset);
+    /* ---------- 3. Robust header parsing ---------------------------------- */
+    const lines = headerText.split(/\r?\n/).filter(Boolean);
     if (lines[0] !== 'ply') {
-        throw new Error(`[PLY ERROR] not a .ply file`);
+        throw new Error('[PLY] Not a PLY file');
     }
-    if (lines[1] !== 'format binary_little_endian 1.0') {
-        throw new Error(`[PLY ERROR] unsupported .ply format`);
-    }
-    const vertexMatch = lines[2].match(/element vertex (\d+)/);
-    if (!vertexMatch) {
-        throw new Error(`[PLY ERROR] missing vertex count`);
-    }
-    const numPoints = parseInt(vertexMatch[1]);
-    if (numPoints <= 0 || numPoints > 10 * 1024 * 1024) {
-        throw new Error(`[PLY ERROR] invalid vertex count: ${numPoints}`);
-    }
-    // Parse fields
-    const fields = new Map();
-    let fieldIndex = 0;
-    for (const line of lines.slice(3)) {
-        if (line === 'end_header')
-            break;
-        if (!line.startsWith('property float ')) {
-            throw new Error(`[PLY ERROR] unsupported property data type: ${line}`);
+    let formatOK = false;
+    let numPoints = 0;
+    const propDefs = [];
+    let strideBytes = 0;
+    let parsingVertexProps = false;
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.startsWith('format binary_little_endian')) {
+            formatOK = true;
+            continue;
         }
-        const name = line.substring('property float '.length);
-        fields.set(name, fieldIndex++);
+        if (line.startsWith('comment') || line.startsWith('obj_info'))
+            continue;
+        if (line.startsWith('element')) {
+            const [, elem, count] = line.split(/\s+/);
+            parsingVertexProps = (elem === 'vertex');
+            if (elem === 'vertex')
+                numPoints = Number(count);
+            continue;
+        }
+        if (line.startsWith('property') && parsingVertexProps) {
+            const [, type, name] = line.split(/\s+/);
+            const size = byteSizeForType(type);
+            propDefs.push({ name, type, offsetBytes: strideBytes });
+            strideBytes += size;
+            continue;
+        }
     }
-    // Get field indices
-    const positionIdx = ['x', 'y', 'z'].map(name => getFieldIndex(fields, name));
-    const scaleIdx = ['scale_0', 'scale_1', 'scale_2'].map(name => getFieldIndex(fields, name));
-    const rotIdx = ['rot_1', 'rot_2', 'rot_3', 'rot_0'].map(name => getFieldIndex(fields, name));
-    const alphaIdx = [getFieldIndex(fields, 'opacity')];
-    const colorIdx = ['f_dc_0', 'f_dc_1', 'f_dc_2'].map(name => getFieldIndex(fields, name));
-    // Validate indices
-    if ([...positionIdx, ...scaleIdx, ...rotIdx, ...alphaIdx, ...colorIdx].some(idx => idx < 0)) {
-        throw new Error('[PLY ERROR] Missing required fields');
-    }
-    // Get SH indices
+    if (!formatOK)
+        throw new Error('[PLY] Only binary_little_endian supported');
+    if (!numPoints)
+        throw new Error('[PLY] Vertex count missing or zero');
+    /* ---------- 4. Fast lookup tables ------------------------------------- */
+    const fieldOffsetMap = new Map();
+    propDefs.forEach(({ name, offsetBytes }) => fieldOffsetMap.set(name, offsetBytes / 4) // convert to float index
+    );
+    const posIdx = ['x', 'y', 'z'].map(n => getFieldIndex(fieldOffsetMap, n));
+    const scaleIdx = ['scale_0', 'scale_1', 'scale_2'].map(n => getFieldIndex(fieldOffsetMap, n));
+    const rotIdx = ['rot_1', 'rot_2', 'rot_3', 'rot_0'].map(n => getFieldIndex(fieldOffsetMap, n));
+    const alphaIdx = [getFieldIndex(fieldOffsetMap, 'opacity')];
+    const colorIdx = ['f_dc_0', 'f_dc_1', 'f_dc_2'].map(n => getFieldIndex(fieldOffsetMap, n));
     const shIdx = [];
-    for (let i = 0; i < 45; i++) {
-        const idx = fields.get(`f_rest_${i}`);
+    for (let i = 0;; i++) {
+        const idx = fieldOffsetMap.get(`f_rest_${i}`);
         if (idx === undefined)
             break;
         shIdx.push(idx);
     }
     const shDim = Math.floor(shIdx.length / 3);
-    // Read binary data
-    const floatSize = 4;
-    const stride = fields.size * floatSize;
-    const totalSize = numPoints * stride;
-    const buffer = new ArrayBuffer(totalSize);
-    const uint8View = new Uint8Array(buffer);
-    let offset = 0;
-    // Copy initial binary data
-    uint8View.set(binaryData, 0);
-    offset += binaryData.length;
-    // Read remaining data
-    while (offset < totalSize) {
+    const strideFloats = strideBytes / 4;
+    /* ---------- 5. Stream binary payload directly into pre-alloc buffer --- */
+    const totalBinaryBytes = numPoints * strideBytes;
+    const buffer = new ArrayBuffer(totalBinaryBytes);
+    const dest = new Uint8Array(buffer);
+    // paste the bytes we already have
+    dest.set(initialBinary, 0);
+    let cursor = initialBinary.length;
+    while (cursor < totalBinaryBytes) {
         const { value, done } = await reader.read();
         if (done)
-            break;
-        uint8View.set(value, offset);
-        offset += value.length;
+            throw new Error('[PLY] Truncated binary section');
+        dest.set(value, cursor);
+        cursor += value.length;
     }
     reader.releaseLock();
-    // Create result
+    /* ---------- 6. Decode vertices via Float32 view ----------------------- */
+    const f32 = new Float32Array(buffer);
     const result = {
         numPoints,
         shDegree: degreeForDim(shDim),
@@ -105,27 +142,43 @@ export async function loadPly(stream) {
         rotations: new Float32Array(numPoints * 4),
         alphas: new Float32Array(numPoints),
         colors: new Float32Array(numPoints * 3),
-        sh: new Float32Array(numPoints * shDim * 3)
+        sh: new Float32Array(numPoints * shDim * 3),
     };
-    // Parse values
-    const dataView = new DataView(buffer);
     for (let i = 0; i < numPoints; i++) {
-        const baseOffset = i * fields.size;
-        // Copy positions, scales, rotations, alpha, colors, and SH coefficients
-        for (let j = 0; j < 3; j++) {
-            result.positions[i * 3 + j] = dataView.getFloat32((baseOffset + positionIdx[j]) * floatSize, true);
-            result.scales[i * 3 + j] = dataView.getFloat32((baseOffset + scaleIdx[j]) * floatSize, true);
-            result.colors[i * 3 + j] = dataView.getFloat32((baseOffset + colorIdx[j]) * floatSize, true);
-        }
-        for (let j = 0; j < 4; j++) {
-            result.rotations[i * 4 + j] = dataView.getFloat32((baseOffset + rotIdx[j]) * floatSize, true);
-        }
-        result.alphas[i] = dataView.getFloat32((baseOffset + alphaIdx[0]) * floatSize, true);
+        const base = i * strideFloats;
+        /* positions, scales, colours */
+        result.positions.set([
+            f32[base + posIdx[0]],
+            f32[base + posIdx[1]],
+            f32[base + posIdx[2]],
+        ], i * 3);
+        result.scales.set([
+            f32[base + scaleIdx[0]],
+            f32[base + scaleIdx[1]],
+            f32[base + scaleIdx[2]],
+        ], i * 3);
+        result.colors.set([
+            f32[base + colorIdx[0]],
+            f32[base + colorIdx[1]],
+            f32[base + colorIdx[2]],
+        ], i * 3);
+        /* rotations (quat wxyz order rot_0..3) */
+        result.rotations.set([
+            f32[base + rotIdx[0]],
+            f32[base + rotIdx[1]],
+            f32[base + rotIdx[2]],
+            f32[base + rotIdx[3]],
+        ], i * 4);
+        /* alpha */
+        result.alphas[i] = f32[base + alphaIdx[0]];
+        /* spherical harmonics */
         for (let j = 0; j < shDim; j++) {
-            for (let c = 0; c < 3; c++) {
-                result.sh[(i * shDim + j) * 3 + c] = dataView.getFloat32((baseOffset + shIdx[j + c * shDim]) * floatSize, true);
-            }
+            const dst = (i * shDim + j) * 3;
+            result.sh[dst] = f32[base + shIdx[j]]; // R
+            result.sh[dst + 1] = f32[base + shIdx[j + shDim]]; // G
+            result.sh[dst + 2] = f32[base + shIdx[j + 2 * shDim]]; // B
         }
     }
     return result;
 }
+// --------------------------------------------------------------------------
