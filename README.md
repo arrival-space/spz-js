@@ -4,7 +4,7 @@ Based on the [original C++ library](https://github.com/nianticlabs/spz).
 
 ## Installation
 
-Install directly from npm:
+[![NPM](https://nodei.co/npm/spz-js.png)](https://npmjs.org/package/spz-js)
 
 ```bash
 npm install spz-js
