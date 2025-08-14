@@ -73,11 +73,3 @@ const loadFile = async (url) => {
     throw new Error(`Unsupported file extension: ${extension}`);
 };
 ```
-
-## Example (CLI)
-
-```bash
-npm install -g spz-js
-
-spz-convert input_splat.ply compressed_splat.spz
-```
