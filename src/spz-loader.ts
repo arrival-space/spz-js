@@ -228,7 +228,7 @@ interface PackedGaussiansHeader {
 const HEADER_SIZE = 16; // 4 + 4 + 4 + 1 + 1 + 1 + 1 bytes
 const MAX_POINTS_TO_READ = 10000000;
 
-function deserializePackedGaussians(buffer: ArrayBuffer): PackedGaussians | null {
+function deserializePackedGaussians(buffer: ArrayBufferLike): PackedGaussians | null {
     const view = new DataView(buffer);
     let offset = 0;
 

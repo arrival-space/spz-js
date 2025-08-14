@@ -19,7 +19,8 @@ export async function decompressGzipped(data) {
     }
 }
 export async function decompressGzipStream(stream) {
-    const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
+    const decompressor = new DecompressionStream('gzip');
+    const decompressedStream = stream.pipeThrough(decompressor);
     const response = new Response(decompressedStream);
     const buffer = await response.arrayBuffer();
     return new Uint8Array(buffer);
@@ -27,7 +28,8 @@ export async function decompressGzipStream(stream) {
 export async function compressGzipped(data) {
     try {
         const stream = createStream(data);
-        const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
+        const compressor = new CompressionStream('gzip');
+        const compressedStream = stream.pipeThrough(compressor);
         const response = new Response(compressedStream);
         const buffer = await response.arrayBuffer();
         return new Uint8Array(buffer);
