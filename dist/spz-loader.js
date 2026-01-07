@@ -2,6 +2,8 @@ import { decompressGzipped } from './compression.js';
 import { dimForDegree, FLAG_ANTIALIASED, SPZ_MAGIC } from './constant.js';
 import { normalized, timesScalar, plus, halfToFloat } from './math.js';
 const colorScale = 0.15;
+const SQRT1_2 = 1 / Math.sqrt(2);
+const QUAT_SMALLEST_THREE_MASK = (1 << 9) - 1; // 9-bit magnitude mask (511)
 function sigmoid(x) {
     return 1.0 / (1.0 + Math.exp(-x));
 }
@@ -104,8 +106,11 @@ function unpackGaussians(packed) {
     const numPoints = packed.numPoints;
     const shDim = dimForDegree(packed.shDegree);
     const usesFloat16 = packed.positions.length === numPoints * 3 * 2;
+    const rotationBytes = packed.rotations.length === numPoints * 4 ? 4 :
+        packed.rotations.length === numPoints * 3 ? 3 :
+            0;
     // Validate sizes
-    if (!checkSizes2(packed, numPoints, shDim, usesFloat16)) {
+    if (!checkSizes2(packed, numPoints, shDim, usesFloat16, rotationBytes)) {
         return null;
     }
     const result = {
@@ -143,21 +148,52 @@ function unpackGaussians(packed) {
         result.scales[i] = packed.scales[i] / 16.0 - 10.0;
     }
     // Decode rotations
-    for (let i = 0; i < numPoints; i++) {
-        const r = packed.rotations.subarray(i * 3, i * 3 + 3);
-        // Create xyz vector and apply scaling and offset
-        const xyz = [
-            r[0] / 127.5 - 1.0,
-            r[1] / 127.5 - 1.0,
-            r[2] / 127.5 - 1.0
-        ];
-        // Copy xyz components
-        result.rotations[i * 4] = xyz[0];
-        result.rotations[i * 4 + 1] = xyz[1];
-        result.rotations[i * 4 + 2] = xyz[2];
-        // Compute the real component (w) - quaternion is normalized and w is non-negative
-        const squaredNorm = xyz[0] * xyz[0] + xyz[1] * xyz[1] + xyz[2] * xyz[2];
-        result.rotations[i * 4 + 3] = Math.sqrt(Math.max(0.0, 1.0 - squaredNorm));
+    if (rotationBytes === 3) {
+        // V2 (and earlier): store xyz, reconstruct w (non-negative)
+        for (let i = 0; i < numPoints; i++) {
+            const r = packed.rotations.subarray(i * 3, i * 3 + 3);
+            // Create xyz vector and apply scaling and offset
+            const x = r[0] / 127.5 - 1.0;
+            const y = r[1] / 127.5 - 1.0;
+            const z = r[2] / 127.5 - 1.0;
+            // Copy xyz components (xyzw order)
+            const o = i * 4;
+            result.rotations[o + 0] = x;
+            result.rotations[o + 1] = y;
+            result.rotations[o + 2] = z;
+            // Compute the real component (w) - quaternion is normalized and w is non-negative
+            const squaredNorm = x * x + y * y + z * z;
+            result.rotations[o + 3] = Math.sqrt(Math.max(0.0, 1.0 - squaredNorm));
+        }
+    }
+    else {
+        // V3+: "smallest three" quaternion packing (4 bytes)
+        for (let i = 0; i < numPoints; i++) {
+            const inOff = i * 4;
+            // little-endian 32-bit packed value
+            let comp = (packed.rotations[inOff + 0]) |
+                (packed.rotations[inOff + 1] << 8) |
+                (packed.rotations[inOff + 2] << 16) |
+                (packed.rotations[inOff + 3] << 24);
+            const iLargest = comp >>> 30; // 0..3 component index (xyzw order)
+            let sumSquares = 0.0;
+            const outOff = i * 4;
+            // Unpack in reverse order (matches C++ reference)
+            for (let k = 3; k >= 0; --k) {
+                if (k === iLargest)
+                    continue;
+                const mag = comp & QUAT_SMALLEST_THREE_MASK;
+                const negbit = (comp >>> 9) & 0x1;
+                comp = comp >>> 10;
+                let v = SQRT1_2 * (mag / QUAT_SMALLEST_THREE_MASK);
+                if (negbit === 1)
+                    v = -v;
+                result.rotations[outOff + k] = v;
+                sumSquares += v * v;
+            }
+            // Largest component is positive (same rotation for q and -q)
+            result.rotations[outOff + iLargest] = Math.sqrt(Math.max(0.0, 1.0 - sumSquares));
+        }
     }
     // Decode alphas
     for (let i = 0; i < numPoints; i++) {
@@ -174,12 +210,14 @@ function unpackGaussians(packed) {
     return result;
 }
 // Helper function to check sizes (matching C++ checkSizes function)
-function checkSizes2(packed, numPoints, shDim, usesFloat16) {
+function checkSizes2(packed, numPoints, shDim, usesFloat16, rotationBytes) {
     if (packed.positions.length !== numPoints * 3 * (usesFloat16 ? 2 : 3))
         return false;
     if (packed.scales.length !== numPoints * 3)
         return false;
-    if (packed.rotations.length !== numPoints * 3)
+    if (rotationBytes !== 3 && rotationBytes !== 4)
+        return false;
+    if (packed.rotations.length !== numPoints * rotationBytes)
         return false;
     if (packed.alphas.length !== numPoints)
         return false;
@@ -210,7 +248,7 @@ function deserializePackedGaussians(buffer) {
         console.error("[SPZ ERROR] deserializePackedGaussians: header not found");
         return null;
     }
-    if (header.version < 1 || header.version > 2) {
+    if (header.version < 1 || header.version > 3) {
         console.error(`[SPZ ERROR] deserializePackedGaussians: version not supported: ${header.version}`);
         return null;
     }
@@ -225,6 +263,7 @@ function deserializePackedGaussians(buffer) {
     const numPoints = header.numPoints;
     const shDim = dimForDegree(header.shDegree);
     const usesFloat16 = header.version === 1;
+    const usesQuaternionSmallestThree = header.version >= 3;
     // Initialize result object
     const result = {
         numPoints,
@@ -233,7 +272,7 @@ function deserializePackedGaussians(buffer) {
         antialiased: (header.flags & FLAG_ANTIALIASED) !== 0,
         positions: new Uint8Array(numPoints * 3 * (usesFloat16 ? 2 : 3)),
         scales: new Uint8Array(numPoints * 3),
-        rotations: new Uint8Array(numPoints * 3),
+        rotations: new Uint8Array(numPoints * (usesQuaternionSmallestThree ? 4 : 3)),
         alphas: new Uint8Array(numPoints),
         colors: new Uint8Array(numPoints * 3),
         sh: new Uint8Array(numPoints * shDim * 3)
