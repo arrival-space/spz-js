@@ -123,3 +123,77 @@ export function vec3ToQuat4(v, w) {
 export function quatToVec3(q) {
     return [q[1], q[2], q[3]]; // Skip w, take xyz
 }
+/**
+ * Minimal vector/quaternion types.
+ *
+ * These exist so the library has no runtime dependency on the playcanvas engine,
+ * which used to be pulled in whole for the handful of field accesses the
+ * compressed-PLY code makes. Only what that code actually uses is implemented.
+ */
+export class Vec3 {
+    x = 0;
+    y = 0;
+    z = 0;
+    constructor(x = 0, y = 0, z = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+    set(x, y, z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        return this;
+    }
+}
+export class Vec4 {
+    x = 0;
+    y = 0;
+    z = 0;
+    w = 0;
+    constructor(x = 0, y = 0, z = 0, w = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.w = w;
+    }
+    set(x, y, z, w) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.w = w;
+        return this;
+    }
+}
+export class Quat {
+    x = 0;
+    y = 0;
+    z = 0;
+    w = 1;
+    constructor(x = 0, y = 0, z = 0, w = 1) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.w = w;
+    }
+    set(x, y, z, w) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.w = w;
+        return this;
+    }
+    /** Scale to unit length in place. A zero-length quaternion becomes identity. */
+    normalize() {
+        const len = Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z + this.w * this.w);
+        if (len === 0) {
+            return this.set(0, 0, 0, 1);
+        }
+        const inv = 1 / len;
+        this.x *= inv;
+        this.y *= inv;
+        this.z *= inv;
+        this.w *= inv;
+        return this;
+    }
+}

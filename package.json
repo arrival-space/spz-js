@@ -1,15 +1,15 @@
 {
   "name": "spz-js",
-  "email": "ludovit@arrival.space",
-  "author": "Ludovit Kramar",
-  "version": "1.2.5",
+  "author": "arrival.space",
+  "version": "1.3.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "/dist/**/*"
   ],
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "node test/spz-v4.test.mjs"
   },
   "keywords": [
     "spz",
@@ -26,11 +26,10 @@
   "type": "module",
   "homepage": "https://github.com/arrival-space/spz-js",
   "bugs": {
-    "url": "https://github.com/arrival-space/spz-js/issues",
-    "email": "ludovit@arrival.space"
+    "url": "https://github.com/arrival-space/spz-js/issues"
   },
   "license": "MIT",
   "dependencies": {
-    "playcanvas": "^2.3.3"
+    "fzstd": "^0.1.1"
   }
 }

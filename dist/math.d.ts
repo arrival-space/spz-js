@@ -17,3 +17,35 @@ export declare function timesScalar<T extends Vec3f | Quat4f>(v: T, s: number): 
 export declare function plus<T extends Vec3f | Quat4f>(a: T, b: T): T;
 export declare function vec3ToQuat4(v: Vec3f, w: number): Quat4f;
 export declare function quatToVec3(q: Quat4f): Vec3f;
+/**
+ * Minimal vector/quaternion types.
+ *
+ * These exist so the library has no runtime dependency on the playcanvas engine,
+ * which used to be pulled in whole for the handful of field accesses the
+ * compressed-PLY code makes. Only what that code actually uses is implemented.
+ */
+export declare class Vec3 {
+    x: number;
+    y: number;
+    z: number;
+    constructor(x?: number, y?: number, z?: number);
+    set(x: number, y: number, z: number): this;
+}
+export declare class Vec4 {
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+    constructor(x?: number, y?: number, z?: number, w?: number);
+    set(x: number, y: number, z: number, w: number): this;
+}
+export declare class Quat {
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+    constructor(x?: number, y?: number, z?: number, w?: number);
+    set(x: number, y: number, z: number, w: number): this;
+    /** Scale to unit length in place. A zero-length quaternion becomes identity. */
+    normalize(): this;
+}

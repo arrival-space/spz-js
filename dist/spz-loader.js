@@ -1,5 +1,6 @@
 import { decompressGzipped } from './compression.js';
 import { dimForDegree, FLAG_ANTIALIASED, SPZ_MAGIC } from './constant.js';
+import { deserializePackedGaussiansV4, readSpzV4Header } from './spz-v4-loader.js';
 import { normalized, timesScalar, plus, halfToFloat } from './math.js';
 const colorScale = 0.15;
 const SQRT1_2 = 1 / Math.sqrt(2);
@@ -307,15 +308,41 @@ function deserializePackedGaussians(buffer) {
 }
 async function loadSpzPacked(compressedData) {
     try {
+        // v4 dropped the outer gzip: its header is plaintext, so the magic is
+        // readable straight away and each attribute is its own ZSTD stream.
+        // v1-3 are one gzip stream, and start with the gzip magic instead.
+        const buffer = toArrayBuffer(compressedData);
+        if (readSpzV4Header(buffer)) {
+            return deserializePackedGaussiansV4(buffer);
+        }
         const decompressed = await decompressGzipped(compressedData);
-        return deserializePackedGaussians(decompressed.buffer);
+        return deserializePackedGaussians(toArrayBuffer(decompressed));
     }
     catch (error) {
         console.error("[SPZ ERROR] loadSpzPacked: decompression error", error);
         return null;
     }
 }
+/**
+ * The bytes of a view as a standalone ArrayBuffer. A Uint8Array can be a window
+ * into a larger buffer (a Node Buffer usually is), and both header readers index
+ * from offset 0, so anything that is not already the whole buffer is copied.
+ */
+function toArrayBuffer(data) {
+    return (data.byteOffset === 0 && data.byteLength === data.buffer.byteLength) ?
+        data.buffer :
+        data.slice().buffer;
+}
 export async function loadSpz(buffer) {
     const packed = await loadSpzPacked(buffer);
-    return unpackGaussians(packed);
+    if (!packed) {
+        // The reader already logged what it objected to. Throwing beats returning a
+        // null the caller then dereferences - which is what used to happen.
+        throw new Error("Failed to read SPZ file: unsupported version or corrupt data");
+    }
+    const cloud = unpackGaussians(packed);
+    if (!cloud) {
+        throw new Error("Failed to read SPZ file: attribute sizes do not match the header");
+    }
+    return cloud;
 }

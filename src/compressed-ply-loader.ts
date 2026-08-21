@@ -1,6 +1,6 @@
 // This file is largely based on the ply.js and gsplat-compressed-data.js files from "playcanvas".
 
-import { Quat, Vec4, Vec3 } from "playcanvas";
+import { Quat, Vec4, Vec3 } from "./math.js";
 
 import { dimForDegree, SH_C0 } from "./constant.js";
 import { GaussianCloud } from "./types.js";

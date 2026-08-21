@@ -1,3 +1,5 @@
+import { decompress as zstdDecompress } from 'fzstd';
+
 const createStream = (data: Uint8Array): ReadableStream<Uint8Array> => {
     return new ReadableStream({
         async start(controller) {
@@ -41,4 +43,23 @@ export async function compressGzipped(data: Uint8Array): Promise<Uint8Array> {
         console.error('Error compressing gzipped data:', error);
         throw error;
     }
+}
+
+/**
+ * Decompress a single ZSTD frame (SPZ v4 stores every attribute stream as one).
+ *
+ * There is no web-standard 'zstd' DecompressionStream, so this uses fzstd - a
+ * pure-JS decoder that runs unchanged in the browser and in Node, with no wasm
+ * to host alongside the library.
+ *
+ * @param data - The compressed frame.
+ * @param uncompressedSize - Expected size, taken from the stream's table of
+ *   contents entry; a mismatch means the file is corrupt.
+ */
+export function decompressZstd(data: Uint8Array, uncompressedSize: number): Uint8Array {
+    const out = zstdDecompress(data, uncompressedSize > 0 ? new Uint8Array(uncompressedSize) : undefined);
+    if (out.length !== uncompressedSize) {
+        throw new Error(`ZSTD stream decompressed to ${out.length} bytes, expected ${uncompressedSize}`);
+    }
+    return out;
 }

@@ -1,6 +1,6 @@
 // Parts of the code are taken from https://github.com/playcanvas/supersplat/blob/main/src/splat-serialize.ts
 
-import { Quat } from 'playcanvas';
+import { Quat } from './math.js';
 
 import { GaussianCloud } from './types.js';
 import { dimForDegree, SH_C0 } from './constant.js';

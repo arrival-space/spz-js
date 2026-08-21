@@ -1,5 +1,5 @@
 // This file is largely based on the ply.js and gsplat-compressed-data.js files from "playcanvas".
-import { Quat, Vec4, Vec3 } from "playcanvas";
+import { Quat, Vec4, Vec3 } from "./math.js";
 import { dimForDegree, SH_C0 } from "./constant.js";
 const magicBytes = new Uint8Array([112, 108, 121, 10]); // ply\n
 const endHeaderBytes = new Uint8Array([10, 101, 110, 100, 95, 104, 101, 97, 100, 101, 114, 10]); // \nend_header\n
